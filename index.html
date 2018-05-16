@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CRUD Backbone JS</title>
+
+    <link rel="stylesheet" type="text/css" href="lib/bootstrap3/css/bootstrap.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div id="content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="lib/jquery.js"></script>
+    <script type="text/javascript" src="lib/underscore.js"></script>
+    <script type="text/javascript" src="lib/backbone.js"></script>
+    <script type="text/javascript" src="lib/bootstrap3/js/bootstrap.js"></script>
+
+    <script type="text/template" id="users-table-tmpl">
+        <h1 class="page-header">Users List</h1>
+
+        <a href="#/users/create">Create User</a>
+
+        <table class="table table-hover table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if(!users.isEmpty()) { %>
+                    <% users.each(function(index, user) { %>
+                    <tr>
+                        <td><% index + 1 %></td>
+                        <td><% user.getFullName() %></td>
+                        <td><% user.email %></td>
+                        <td>
+                            <a href="#" class="btn btn-success btn-sm">Edit</a>
+                            <a href="#" class="btn btn-danger btn-sm">Delete</a>
+                        </td>
+                    </tr>
+                    <% }) %>
+                <% } else { %>
+                    <tr>
+                        <td colspan="4">No Users</td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+    </script>
+
+    <script type="text/template" id="user-create-tmpl">
+        <form role="form">
+            <div class="form-group">
+                <label for="">First Name</label>
+                <input type="text" name="first_name" class="form-control" />
+            </div>
+
+            <div class="form-group">
+                <label for="">Last Name</label>
+                <input type="text" name="last_name" class="form-control" />
+            </div>
+
+            <div class="form-group">
+                <label for="">Email</label>
+                <input type="text" name="email" class="form-control" />
+            </div>
+
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+    </script>
+
+    <script type="text/javascript">
+        var Router = Backbone.Router.extend({
+            routes: {
+                'users': "userList"
+                'create': "userCreate"
+            },
+
+            userList: function() {
+                var userList = new UserList({collection: new Users()});
+                userList.render();
+            },
+
+            userCreate: function() {
+                var userCreate = new UserCreate();
+                userList.render();
+            }
+        });
+
+        var Users = Backbone.Collection.extend({
+            model: User
+        });
+
+        var User = Backbone.Model.extend({
+            getFullName: function() {
+                return this.first_name + " " + this.last_name;
+            }
+        });
+
+        var UserList = Backbone.View.extend({
+            el: "#content",
+
+            initialize: function() {
+                this.template = _.template($('#users-table-tmpl').html());
+            },
+
+            render: function() {
+                this.$el.html(this.template({users: this.collection}));
+                return this;
+            }
+        });
+
+        var UserCreate = Backbone.View.extend({
+            el: "#content",
+
+            initialize: function() {
+                this.template = _.template($('#user-create-tmpl').html());
+            },
+
+            render: function() {
+                this.$el.html(this.template());
+                return this;
+            }
+        });
+
+        var router = new Router();
+        Backbone.history.start();
+    </script>
+</body>
+</html>
