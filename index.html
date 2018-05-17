@@ -23,7 +23,9 @@
     <script type="text/template" id="users-table-tmpl">
         <h1 class="page-header">Users List</h1>
 
-        <a href="#/users/create">Create User</a>
+        <div id="alert-message"></div>
+
+        <a href="javascript:void(0)" class="btn btn-primary btn-sm create-user" style="margin-bottom: 10px">Create User</a>
 
         <table class="table table-hover table-bordered table-striped">
             <thead>
@@ -36,14 +38,14 @@
             </thead>
             <tbody>
                 <% if(!users.isEmpty()) { %>
-                    <% users.each(function(index, user) { %>
+                    <% users.each(function(user, index) { %>
                     <tr>
-                        <td><% index + 1 %></td>
-                        <td><% user.getFullName() %></td>
-                        <td><% user.email %></td>
+                        <td><%= index + 1 %></td>
+                        <td><%= user.getFullName() %></td>
+                        <td><%= user.get('email') %></td>
                         <td>
-                            <a href="#" class="btn btn-success btn-sm">Edit</a>
-                            <a href="#" class="btn btn-danger btn-sm">Delete</a>
+                            <a href="javascript:void(0)" class="btn btn-success btn-sm edit-user" data-id="<%= user.cid %>">Edit</a>
+                            <a href="javascript:void(0)" class="btn btn-danger btn-sm delete-user" data-id="<%= user.cid %>">Delete</a>
                         </td>
                     </tr>
                     <% }) %>
@@ -56,57 +58,120 @@
         </table>
     </script>
 
-    <script type="text/template" id="user-create-tmpl">
+    <script type="text/template" id="user-form-tmpl">
+        <h1 class="page-header"><%= page_header %></h1>
+
         <form role="form">
             <div class="form-group">
                 <label for="">First Name</label>
-                <input type="text" name="first_name" class="form-control" />
+                <input type="text" name="first_name" value="<%= first_name %>" class="form-control" />
             </div>
 
             <div class="form-group">
                 <label for="">Last Name</label>
-                <input type="text" name="last_name" class="form-control" />
+                <input type="text" name="last_name" value="<%= last_name %>" class="form-control" />
             </div>
 
             <div class="form-group">
                 <label for="">Email</label>
-                <input type="text" name="email" class="form-control" />
+                <input type="text" name="email" value="<%= email %>" class="form-control" />
             </div>
 
-            <button type="submit" class="btn btn-primary">Submit</button>
+            <button type="submit" class="btn btn-primary"><%= button_text %></button>
+            <a href="javascript:void(0)" class="btn btn-default back">Cancel</a>
         </form>
+    </script>
+
+    <script type="text/template" id="alert-message-tmpl">
+        <div class="alert alert-<%= alert_class %> fade in">
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+            <p><span class="glyphicon glyphicon-info-sign"></span> <%= message %></p>
+        </div>
     </script>
 
     <script type="text/javascript">
         var Router = Backbone.Router.extend({
             routes: {
-                'users': "userList"
-                'create': "userCreate"
+                'users': "userList",
+                'users/create': "userCreate",
+                'users/:id/edit': "userEdit",
+                'users/:id/update': "userUpdate"
             },
 
             userList: function() {
-                var userList = new UserList({collection: new Users()});
                 userList.render();
             },
 
             userCreate: function() {
-                var userCreate = new UserCreate();
-                userList.render();
+                alert();
+                userCreate.render();
+            },
+
+            userEdit: function(id) {
+                console.log(id);
             }
         });
+
+        var User = Backbone.Model.extend(
+            {
+                getFullName: function() {
+                    return this.get('first_name') + " " + this.get('last_name');
+                },
+            },
+            {
+                // static
+                create: function(data) {
+                    var user = new this({
+                        first_name: data.first_name,
+                        last_name: data.last_name,
+                        email: data.email,
+                    });
+
+                    return users.add(user);
+                },
+
+                delete: function(id) {
+                    return users.remove(users.get({id: id}));
+                }
+            }
+        );
 
         var Users = Backbone.Collection.extend({
             model: User
         });
 
-        var User = Backbone.Model.extend({
-            getFullName: function() {
-                return this.first_name + " " + this.last_name;
-            }
-        });
-
         var UserList = Backbone.View.extend({
             el: "#content",
+
+            events: {
+                'click .create-user': "createUser",
+                'click .edit-user': "editUser",
+                'click .delete-user': "deleteUser"
+            },
+
+            createUser: function() {
+                router.navigate("users", {trigger: true});
+            },
+
+            editUser: function(e) {
+                var id = $(e.currentTarget).data('id');
+                userEdit.render(id);
+            },
+
+            deleteUser: function(e) {
+                var id = $(e.currentTarget).data('id');
+
+                var alert_message = _.template($('#alert-message-tmpl').html());
+                var result = User.delete(id);
+
+                router.navigate("users", {trigger: true});
+
+                if (result !== null) {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Delete."}));
+                } else {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not Delete."}));
+                }
+            },
 
             initialize: function() {
                 this.template = _.template($('#users-table-tmpl').html());
@@ -121,15 +186,111 @@
         var UserCreate = Backbone.View.extend({
             el: "#content",
 
+            events: {
+                'submit form': "createUser",
+                'click form .back': "back"
+            },
+
+            createUser: function(e) {
+                e.preventDefault();
+
+                var form = $(e.currentTarget);
+                var alert_message = _.template($('#alert-message-tmpl').html());
+
+                var result = User.create({
+                    first_name: form.find(':input[name="first_name"]').val(),
+                    last_name: form.find(':input[name="last_name"]').val(),
+                    email: form.find(':input[name="email"]').val()
+                });
+
+                router.navigate("users", {trigger: true});
+
+                if (result !== null) {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
+                } else {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not created."}));
+                }
+            },
+
+            back: function() {
+                window.history.back();
+            },
+
             initialize: function() {
-                this.template = _.template($('#user-create-tmpl').html());
+                this.template = _.template($('#user-form-tmpl').html());
             },
 
             render: function() {
-                this.$el.html(this.template());
+                this.$el.html(this.template({
+                    page_header: "Create User",
+                    button_text: "Submit",
+                    first_name: "",
+                    last_name: "",
+                    email: ""
+                }));
                 return this;
             }
         });
+
+        var UserEdit = Backbone.View.extend({
+            el: "#content",
+
+            events: {
+                'submit form': "updateUser",
+                'click form .back': "back"
+            },
+
+            updateUser: function(e) {
+                e.preventDefault();
+
+                // var form = $(e.currentTarget);
+                // var alert_message = _.template($('#alert-message-tmpl').html());
+
+                // var result = User.create({
+                //     first_name: form.find(':input[name="first_name"]').val(),
+                //     last_name: form.find(':input[name="last_name"]').val(),
+                //     email: form.find(':input[name="email"]').val()
+                // });
+
+                // router.navigate("users", {trigger: true});
+
+                // if (result !== null) {
+                //     userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
+                // } else {
+                //     userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not created."}));
+                // }
+            },
+
+            back: function() {
+                window.history.back();
+            },
+
+            initialize: function() {
+                this.template = _.template($('#user-form-tmpl').html());
+            },
+
+            render: function(id) {
+                var user = users.get(id);
+
+                this.$el.html(this.template({
+                    page_header: "Edit User",
+                    button_text: "Update",
+                    first_name: user.get('first_name'),
+                    last_name: user.get('last_name'),
+                    email: user.get('email')
+                }));
+                return this;
+            }
+        });
+
+
+        // Collection instances
+        var users = new Users();
+
+        // View instances
+        var userList = new UserList({collection: users});
+        var userCreate = new UserCreate();
+        var userEdit = new UserEdit();
 
         var router = new Router();
         Backbone.history.start();
