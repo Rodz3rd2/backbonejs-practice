@@ -61,7 +61,11 @@
     <script type="text/template" id="user-form-tmpl">
         <h1 class="page-header"><%= page_header %></h1>
 
-        <form role="form">
+        <form role="form" id="<%= form_id %>">
+            <% if(typeof(id) !== "undefined") { %>
+            <input type="hidden" name="id" value="<%= id %>" />
+            <% } %>
+
             <div class="form-group">
                 <label for="">First Name</label>
                 <input type="text" name="first_name" value="<%= first_name %>" class="form-control" />
@@ -78,7 +82,7 @@
             </div>
 
             <button type="submit" class="btn btn-primary"><%= button_text %></button>
-            <a href="javascript:void(0)" class="btn btn-default back">Cancel</a>
+            <a href="javascript:void(0)" class="btn btn-default cancel">Cancel</a>
         </form>
     </script>
 
@@ -90,25 +94,76 @@
     </script>
 
     <script type="text/javascript">
-        var Router = Backbone.Router.extend({
+        var UserRouter = Backbone.Router.extend({
             routes: {
-                'users': "userList",
-                'users/create': "userCreate",
-                'users/:id/edit': "userEdit",
-                'users/:id/update': "userUpdate"
+                'users': "index",
+                'users/create': "create",
+                'users/:id/edit': "edit",
             },
 
-            userList: function() {
+            index: function() {
                 userList.render();
             },
 
-            userCreate: function() {
-                alert();
+            create: function() {
                 userCreate.render();
             },
 
-            userEdit: function(id) {
-                console.log(id);
+            store: function(e) {
+                var form = $(e.currentTarget);
+                var alert_message = _.template($('#alert-message-tmpl').html());
+
+                var result = User.create({
+                    first_name: form.find(':input[name="first_name"]').val(),
+                    last_name: form.find(':input[name="last_name"]').val(),
+                    email: form.find(':input[name="email"]').val()
+                });
+
+                userRouter.navigate("users", {trigger: true});
+
+                if (result !== null) {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
+                } else {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Create User."}));
+                }
+            },
+
+            edit: function(id) {
+                userEdit.render(id);
+            },
+
+            update: function(e) {
+                var form = $(e.currentTarget);
+                var id = form.find(':input[name="id"]').val();
+
+                var alert_message = _.template($('#alert-message-tmpl').html());
+
+                var result = User.update({
+                    first_name: form.find(':input[name="first_name"]').val(),
+                    last_name: form.find(':input[name="last_name"]').val(),
+                    email: form.find(':input[name="email"]').val()
+                }, id);
+
+                userRouter.navigate("users", {trigger: true});
+
+                if (result !== null) {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Updated."}));
+                } else {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Update User."}));
+                }
+            },
+
+            delete: function(id) {
+                var alert_message = _.template($('#alert-message-tmpl').html());
+                var result = User.delete(id);
+
+                userList.render();
+
+                if (result !== null) {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Delete."}));
+                } else {
+                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not Delete."}));
+                }
             }
         });
 
@@ -130,8 +185,17 @@
                     return users.add(user);
                 },
 
+                update: function(data, id) {
+                    var user = users.get(id);
+                    user.set('first_name', data.first_name);
+                    user.set('last_name', data.last_name);
+                    user.set('email', data.email);
+
+                    return users.set(user);
+                },
+
                 delete: function(id) {
-                    return users.remove(users.get({id: id}));
+                    return users.remove(users.get(id));
                 }
             }
         );
@@ -150,27 +214,17 @@
             },
 
             createUser: function() {
-                router.navigate("users", {trigger: true});
+                userRouter.navigate("users/create", {trigger: true});
             },
 
             editUser: function(e) {
                 var id = $(e.currentTarget).data('id');
-                userEdit.render(id);
+                userRouter.navigate("users/" + id + "/edit", {trigger: true});
             },
 
             deleteUser: function(e) {
                 var id = $(e.currentTarget).data('id');
-
-                var alert_message = _.template($('#alert-message-tmpl').html());
-                var result = User.delete(id);
-
-                router.navigate("users", {trigger: true});
-
-                if (result !== null) {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Delete."}));
-                } else {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not Delete."}));
-                }
+                userRouter.delete(id);
             },
 
             initialize: function() {
@@ -187,33 +241,17 @@
             el: "#content",
 
             events: {
-                'submit form': "createUser",
-                'click form .back': "back"
+                'submit #form-create-user': "storeUser",
+                'click #form-create-user .cancel': "cancel"
             },
 
-            createUser: function(e) {
+            storeUser: function(e) {
                 e.preventDefault();
-
-                var form = $(e.currentTarget);
-                var alert_message = _.template($('#alert-message-tmpl').html());
-
-                var result = User.create({
-                    first_name: form.find(':input[name="first_name"]').val(),
-                    last_name: form.find(':input[name="last_name"]').val(),
-                    email: form.find(':input[name="email"]').val()
-                });
-
-                router.navigate("users", {trigger: true});
-
-                if (result !== null) {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
-                } else {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not created."}));
-                }
+                userRouter.store(e);
             },
 
-            back: function() {
-                window.history.back();
+            cancel: function() {
+                userRouter.navigate("users", {trigger: true});
             },
 
             initialize: function() {
@@ -223,6 +261,7 @@
             render: function() {
                 this.$el.html(this.template({
                     page_header: "Create User",
+                    form_id: "form-create-user",
                     button_text: "Submit",
                     first_name: "",
                     last_name: "",
@@ -236,33 +275,17 @@
             el: "#content",
 
             events: {
-                'submit form': "updateUser",
-                'click form .back': "back"
+                'submit #form-edit-user': "updateUser",
+                'click #form-edit-user > .cancel': "cancel"
             },
 
             updateUser: function(e) {
                 e.preventDefault();
-
-                // var form = $(e.currentTarget);
-                // var alert_message = _.template($('#alert-message-tmpl').html());
-
-                // var result = User.create({
-                //     first_name: form.find(':input[name="first_name"]').val(),
-                //     last_name: form.find(':input[name="last_name"]').val(),
-                //     email: form.find(':input[name="email"]').val()
-                // });
-
-                // router.navigate("users", {trigger: true});
-
-                // if (result !== null) {
-                //     userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
-                // } else {
-                //     userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not created."}));
-                // }
+                userRouter.update(e);
             },
 
-            back: function() {
-                window.history.back();
+            cancel: function() {
+                userRouter.navigate("users", {trigger: true});
             },
 
             initialize: function() {
@@ -274,7 +297,9 @@
 
                 this.$el.html(this.template({
                     page_header: "Edit User",
+                    form_id: "form-edit-user",
                     button_text: "Update",
+                    id: id,
                     first_name: user.get('first_name'),
                     last_name: user.get('last_name'),
                     email: user.get('email')
@@ -282,7 +307,6 @@
                 return this;
             }
         });
-
 
         // Collection instances
         var users = new Users();
@@ -292,7 +316,7 @@
         var userCreate = new UserCreate();
         var userEdit = new UserEdit();
 
-        var router = new Router();
+        var userRouter = new UserRouter();
         Backbone.history.start();
     </script>
 </body>
