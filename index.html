@@ -99,6 +99,12 @@
                 'users': "index",
                 'users/create': "create",
                 'users/:id/edit': "edit",
+
+                '*notFound': "page404",
+            },
+
+            page404: function() {
+                $('#content').html('<h1 class="page-header">Page 404</h1>');
             },
 
             index: function() {
