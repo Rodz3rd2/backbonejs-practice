@@ -192,12 +192,12 @@
                 },
 
                 update: function(data, id) {
-                    var user = users.get(id);
+                    var user = new User({id: id});
                     user.set('first_name', data.first_name);
                     user.set('last_name', data.last_name);
                     user.set('email', data.email);
 
-                    return users.set(user);
+                    return users.add(user, {merge: true});
                 },
 
                 delete: function(id) {
