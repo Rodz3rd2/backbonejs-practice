@@ -44,8 +44,8 @@
                         <td><%= user.getFullName() %></td>
                         <td><%= user.get('email') %></td>
                         <td>
-                            <a href="javascript:void(0)" class="btn btn-success btn-sm edit-user" data-id="<%= user.cid %>">Edit</a>
-                            <a href="javascript:void(0)" class="btn btn-danger btn-sm delete-user" data-id="<%= user.cid %>">Delete</a>
+                            <a href="javascript:void(0)" class="btn btn-success btn-sm edit-user" data-id="<%= user.id %>">Edit</a>
+                            <a href="javascript:void(0)" class="btn btn-danger btn-sm delete-user" data-id="<%= user.id %>">Delete</a>
                         </td>
                     </tr>
                     <% }) %>
@@ -94,6 +94,102 @@
     </script>
 
     <script type="text/javascript">
+        // Collection variables
+        var users;
+
+        // View variables
+        var userList;
+        var userCreate;
+        var userEdit;
+
+        // router
+        var userRouter;
+
+        // database
+        var db;
+
+        function app() {
+            if (window.openDatabase) {
+                db = openDatabase("backbonejs_crud", "1.0", "Just practice", 5 * 1024 * 1024);
+                db.transaction(function(tx) {
+                    var query = "CREATE TABLE IF NOT EXISTS users(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, first_name VARCHAR(255) NOT NULL, last_name VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL)";
+                    // var query = "DROP table users";
+                    tx.executeSql(query, [], successHandler, errorHandler);
+                });
+
+                // return false;
+            } else {
+                console.log("Web SQL not supported of this browser!");
+                return false;
+            }
+
+            // Collection instances
+            users = new Users();
+            loadUser();
+
+            // View instances
+            userList = new UserList({collection: users});
+            userCreate = new UserCreate();
+            userEdit = new UserEdit();
+
+            userRouter = new UserRouter();
+
+            Backbone.history.start();
+        }
+
+        function loadUser() {
+            db.transaction(function(tx) {
+                var query = "SELECT * FROM users";
+                tx.executeSql(query, [], function(tx, result) {
+                    var models = [];
+                    for (var i = 0; i < result.rows.length; i++) {
+                        var user = result.rows[i];
+
+                        models[i] = new User({
+                            id: user.id,
+                            first_name: user.first_name,
+                            last_name: user.last_name,
+                            email: user.email
+                        });
+                    }
+
+                    users.add(models);
+                    Backbone.history.loadUrl();
+                });
+            });
+        }
+
+        function createUser(data, callback) {
+            db.transaction(function(tx) {
+                var query = "INSERT INTO users(first_name, last_name, email) VALUES(?, ?, ?)";
+                tx.executeSql(query, [data.first_name, data.last_name, data.email], function(tx, results) {
+                    callback(results.insertId);
+                }, errorHandler);
+            });
+        }
+
+        function updateUser(data, id) {
+            db.transaction(function(tx) {
+                var query = "UPDATE users SET first_name=?, last_name=?, email=? WHERE id=?";
+                tx.executeSql(query, [data.first_name, data.last_name, data.email, id], successHandler, errorHandler);
+            });
+        }
+
+        function deleteUser(id) {
+            db.transaction(function(tx) {
+                var query = "DELETE FROM users WHERE id=?";
+                tx.executeSql(query, [id], successHandler, errorHandler);
+            });
+        }
+
+        function successHandler(tx, result) {
+            console.log("Success: ", result);
+        }
+
+        function errorHandler(tx, error) {
+            console.log("Error: ", error);
+        }
+
         var UserRouter = Backbone.Router.extend({
             routes: {
                 'users': "index",
@@ -125,13 +221,15 @@
                     email: form.find(':input[name="email"]').val()
                 });
 
-                userRouter.navigate("users", {trigger: true});
+                setTimeout(function() {
+                    userRouter.navigate("users", {trigger: true});
 
-                if (result !== null) {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
-                } else {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Create User."}));
-                }
+                    if (result !== null) {
+                        userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
+                    } else {
+                        userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Create User."}));
+                    }
+                }, 1000);
             },
 
             edit: function(id) {
@@ -182,13 +280,20 @@
             {
                 // static
                 create: function(data) {
-                    var user = new this({
-                        first_name: data.first_name,
-                        last_name: data.last_name,
-                        email: data.email,
+                    var self = this;
+
+                    createUser(data, function(insertId) {
+                        var user = new self({
+                            id: insertId,
+                            first_name: data.first_name,
+                            last_name: data.last_name,
+                            email: data.email,
+                        });
+
+                        users.add(user);
                     });
 
-                    return users.add(user);
+                    return true;
                 },
 
                 update: function(data, id) {
@@ -197,10 +302,13 @@
                     user.set('last_name', data.last_name);
                     user.set('email', data.email);
 
+                    updateUser(data, id);
+
                     return users.add(user, {merge: true});
                 },
 
                 delete: function(id) {
+                    deleteUser(id);
                     return users.remove(users.get(id));
                 }
             }
@@ -314,16 +422,7 @@
             }
         });
 
-        // Collection instances
-        var users = new Users();
-
-        // View instances
-        var userList = new UserList({collection: users});
-        var userCreate = new UserCreate();
-        var userEdit = new UserEdit();
-
-        var userRouter = new UserRouter();
-        Backbone.history.start();
+        app();
     </script>
 </body>
 </html>
