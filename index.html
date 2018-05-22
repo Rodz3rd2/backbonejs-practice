@@ -125,19 +125,19 @@
 
             // Collection instances
             users = new Users();
-            loadUser();
+            loadUser(function() {
+                // View instances
+                userList = new UserList({collection: users});
+                userCreate = new UserCreate();
+                userEdit = new UserEdit();
 
-            // View instances
-            userList = new UserList({collection: users});
-            userCreate = new UserCreate();
-            userEdit = new UserEdit();
+                userRouter = new UserRouter();
 
-            userRouter = new UserRouter();
-
-            Backbone.history.start();
+                Backbone.history.start();
+            });
         }
 
-        function loadUser() {
+        function loadUser(callback) {
             db.transaction(function(tx) {
                 var query = "SELECT * FROM users";
                 tx.executeSql(query, [], function(tx, result) {
@@ -154,31 +154,31 @@
                     }
 
                     users.add(models);
-                    Backbone.history.loadUrl();
+                    callback();
                 });
             });
         }
 
-        function createUser(data, callback) {
+        function createUser(data, successCallback, errorCallback) {
             db.transaction(function(tx) {
                 var query = "INSERT INTO users(first_name, last_name, email) VALUES(?, ?, ?)";
                 tx.executeSql(query, [data.first_name, data.last_name, data.email], function(tx, results) {
-                    callback(results.insertId);
-                }, errorHandler);
+                    successCallback(results.insertId);
+                }, errorCallback);
             });
         }
 
-        function updateUser(data, id) {
+        function updateUser(data, id, successCallback, errorCallback) {
             db.transaction(function(tx) {
                 var query = "UPDATE users SET first_name=?, last_name=?, email=? WHERE id=?";
-                tx.executeSql(query, [data.first_name, data.last_name, data.email, id], successHandler, errorHandler);
+                tx.executeSql(query, [data.first_name, data.last_name, data.email, id], successCallback, errorCallback);
             });
         }
 
-        function deleteUser(id) {
+        function deleteUser(id, successCallback, errorCallback) {
             db.transaction(function(tx) {
                 var query = "DELETE FROM users WHERE id=?";
-                tx.executeSql(query, [id], successHandler, errorHandler);
+                tx.executeSql(query, [id], successCallback, errorCallback);
             });
         }
 
@@ -213,15 +213,18 @@
 
             store: function(e) {
                 var form = $(e.currentTarget);
-                var alert_message = _.template($('#alert-message-tmpl').html());
 
-                var result = User.create({
+                var data = {
                     first_name: form.find(':input[name="first_name"]').val(),
                     last_name: form.find(':input[name="last_name"]').val(),
                     email: form.find(':input[name="email"]').val()
-                });
+                };
 
-                setTimeout(function() {
+                createUser(data, function(insertId) {
+                    data = $.extend(data, {id: insertId});
+                    var result = User.create(data);
+                    var alert_message = _.template($('#alert-message-tmpl').html());
+
                     userRouter.navigate("users", {trigger: true});
 
                     if (result !== null) {
@@ -229,7 +232,7 @@
                     } else {
                         userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Create User."}));
                     }
-                }, 1000);
+                });
             },
 
             edit: function(id) {
@@ -240,34 +243,39 @@
                 var form = $(e.currentTarget);
                 var id = form.find(':input[name="id"]').val();
 
-                var alert_message = _.template($('#alert-message-tmpl').html());
-
-                var result = User.update({
+                var data = {
                     first_name: form.find(':input[name="first_name"]').val(),
                     last_name: form.find(':input[name="last_name"]').val(),
                     email: form.find(':input[name="email"]').val()
-                }, id);
+                };
 
-                userRouter.navigate("users", {trigger: true});
+                updateUser(data, id, function() {
+                    var alert_message = _.template($('#alert-message-tmpl').html());
+                    var result = User.update(data, id);
 
-                if (result !== null) {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Updated."}));
-                } else {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Update User."}));
-                }
+                    userRouter.navigate("users", {trigger: true});
+
+                    if (result !== null) {
+                        userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Updated."}));
+                    } else {
+                        userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Update User."}));
+                    }
+                });
             },
 
             delete: function(id) {
-                var alert_message = _.template($('#alert-message-tmpl').html());
-                var result = User.delete(id);
+                deleteUser(id, function() {
+                    var alert_message = _.template($('#alert-message-tmpl').html());
+                    var result = User.delete(id);
 
-                userList.render();
+                    Backbone.history.loadUrl();
 
-                if (result !== null) {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Delete."}));
-                } else {
-                    userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not Delete."}));
-                }
+                    if (result !== null) {
+                        userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Delete."}));
+                    } else {
+                        userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not Delete."}));
+                    }
+                });
             }
         });
 
@@ -280,20 +288,14 @@
             {
                 // static
                 create: function(data) {
-                    var self = this;
-
-                    createUser(data, function(insertId) {
-                        var user = new self({
-                            id: insertId,
-                            first_name: data.first_name,
-                            last_name: data.last_name,
-                            email: data.email,
-                        });
-
-                        users.add(user);
+                    var user = new this({
+                        id: data.id,
+                        first_name: data.first_name,
+                        last_name: data.last_name,
+                        email: data.email,
                     });
 
-                    return true;
+                    return users.add(user);
                 },
 
                 update: function(data, id) {
@@ -301,8 +303,6 @@
                     user.set('first_name', data.first_name);
                     user.set('last_name', data.last_name);
                     user.set('email', data.email);
-
-                    updateUser(data, id);
 
                     return users.add(user, {merge: true});
                 },
