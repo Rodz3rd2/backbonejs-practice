@@ -16,6 +16,7 @@
     </div>
 
     <script type="text/javascript" src="lib/jquery.js"></script>
+    <script type="text/javascript" src="lib/jquery.validate.js"></script>
     <script type="text/javascript" src="lib/underscore.js"></script>
     <script type="text/javascript" src="lib/backbone.js"></script>
     <script type="text/javascript" src="lib/bootstrap3/js/bootstrap.js"></script>
@@ -66,17 +67,17 @@
             <input type="hidden" name="id" value="<%= id %>" />
             <% } %>
 
-            <div class="form-group">
+            <div class="form-group has-feedback">
                 <label for="">First Name</label>
                 <input type="text" name="first_name" value="<%= first_name %>" class="form-control" />
             </div>
 
-            <div class="form-group">
+            <div class="form-group has-feedback">
                 <label for="">Last Name</label>
                 <input type="text" name="last_name" value="<%= last_name %>" class="form-control" />
             </div>
 
-            <div class="form-group">
+            <div class="form-group has-feedback">
                 <label for="">Email</label>
                 <input type="text" name="email" value="<%= email %>" class="form-control" />
             </div>
@@ -91,6 +92,57 @@
             <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
             <p><span class="glyphicon glyphicon-info-sign"></span> <%= message %></p>
         </div>
+    </script>
+
+    <script type="text/javascript">
+        $.validator.addMethod('alphaExcept', function(value, element, params) {
+            if (Array.isArray(params)) {
+                for (var i in params) {
+                    value = value.replace(params[i], "");
+                }
+            }
+
+            return this.optional(element) || /^[a-zA-Z]+$/i.test(value);
+        }, "Please enter alphabetic characters.");
+
+        $.validator.setDefaults({
+            errorElement: "span",
+            errorClass: "help-block",
+
+            highlight: function(element, errorClass, successClass) {
+                var feedback = $(element).closest('.form-group').find('.form-control-feedback');
+                var form_group = $(element).closest('.form-group');
+
+                if (form_group.hasClass('has-success')) {
+                    form_group.removeClass('has-success');
+                }
+
+                form_group.addClass('has-error');
+
+                if (feedback.length === 0) {
+                    $(element).after('<span class="glyphicon glyphicon-remove form-control-feedback"></span>');
+                } else if (feedback.hasClass('glyphicon-ok')) {
+                    feedback.removeClass('glyphicon-ok').addClass('glyphicon-remove');
+                }
+            },
+
+            unhighlight: function(element, errorClass, successClass) {
+                var feedback = $(element).closest('.form-group').find('.form-control-feedback');
+                var form_group = $(element).closest('.form-group');
+
+                if (form_group.hasClass('has-error')) {
+                    form_group.removeClass('has-error');
+                }
+
+                form_group.addClass('has-success');
+
+                if (feedback.length === 0) {
+                    $(element).after('<span class="glyphicon glyphicon-ok form-control-feedback"></span>');
+                } else if (feedback.hasClass('glyphicon-remove')) {
+                    feedback.removeClass('glyphicon-remove').addClass('glyphicon-ok');
+                }
+            }
+        });
     </script>
 
     <script type="text/javascript">
@@ -159,29 +211,6 @@
             });
         }
 
-        function createUser(data, successCallback, errorCallback) {
-            db.transaction(function(tx) {
-                var query = "INSERT INTO users(first_name, last_name, email) VALUES(?, ?, ?)";
-                tx.executeSql(query, [data.first_name, data.last_name, data.email], function(tx, results) {
-                    successCallback(results.insertId);
-                }, errorCallback);
-            });
-        }
-
-        function updateUser(data, id, successCallback, errorCallback) {
-            db.transaction(function(tx) {
-                var query = "UPDATE users SET first_name=?, last_name=?, email=? WHERE id=?";
-                tx.executeSql(query, [data.first_name, data.last_name, data.email, id], successCallback, errorCallback);
-            });
-        }
-
-        function deleteUser(id, successCallback, errorCallback) {
-            db.transaction(function(tx) {
-                var query = "DELETE FROM users WHERE id=?";
-                tx.executeSql(query, [id], successCallback, errorCallback);
-            });
-        }
-
         function successHandler(tx, result) {
             console.log("Success: ", result);
         }
@@ -220,19 +249,18 @@
                     email: form.find(':input[name="email"]').val()
                 };
 
-                createUser(data, function(insertId) {
-                    data = $.extend(data, {id: insertId});
-                    var result = User.create(data);
-                    var alert_message = _.template($('#alert-message-tmpl').html());
+                var alert_message = _.template($('#alert-message-tmpl').html());
 
-                    userRouter.navigate("users", {trigger: true});
-
-                    if (result !== null) {
+                User.create(data,
+                    function() {
+                        userRouter.navigate("users", {trigger: true});
                         userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Created."}));
-                    } else {
+                    },
+                    function() {
+                        userRouter.navigate("users", {trigger: true});
                         userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Create User."}));
                     }
-                });
+                );
             },
 
             edit: function(id) {
@@ -249,33 +277,32 @@
                     email: form.find(':input[name="email"]').val()
                 };
 
-                updateUser(data, id, function() {
-                    var alert_message = _.template($('#alert-message-tmpl').html());
-                    var result = User.update(data, id);
+                var alert_message = _.template($('#alert-message-tmpl').html());
 
-                    userRouter.navigate("users", {trigger: true});
-
-                    if (result !== null) {
+                User.update(data, id,
+                    function() {
+                        userRouter.navigate("users", {trigger: true});
                         userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Updated."}));
-                    } else {
+                    },
+                    function() {
+                        userRouter.navigate("users", {trigger: true});
                         userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Cannot Update User."}));
                     }
-                });
+                );
             },
 
             delete: function(id) {
-                deleteUser(id, function() {
-                    var alert_message = _.template($('#alert-message-tmpl').html());
-                    var result = User.delete(id);
+                var alert_message = _.template($('#alert-message-tmpl').html());
 
-                    Backbone.history.loadUrl();
-
-                    if (result !== null) {
+                User.delete(id,
+                    function() {
+                        Backbone.history.loadUrl();
                         userList.$el.find('#alert-message').html(alert_message({alert_class: "success", message: "Successfully Delete."}));
-                    } else {
+                    },
+                    function() {
                         userList.$el.find('#alert-message').html(alert_message({alert_class: "danger", message: "Not Delete."}));
                     }
-                });
+                );
             }
         });
 
@@ -287,29 +314,51 @@
             },
             {
                 // static
-                create: function(data) {
-                    var user = new this({
-                        id: data.id,
-                        first_name: data.first_name,
-                        last_name: data.last_name,
-                        email: data.email,
+                create: function(data, successCallback, errorCallback) {
+                    db.transaction(function(tx) {
+                        var query = "INSERT INTO users(first_name, last_name, email) VALUES(?, ?, ?)";
+                        tx.executeSql(query, [data.first_name, data.last_name, data.email], function(tx, results) {
+                            var inserted_id = results.insertId;
+
+                            var user = new User({
+                                id: inserted_id,
+                                first_name: data.first_name,
+                                last_name: data.last_name,
+                                email: data.email,
+                            });
+
+                            users.add(user);
+
+                            successCallback();
+                        }, errorCallback);
                     });
-
-                    return users.add(user);
                 },
 
-                update: function(data, id) {
-                    var user = new User({id: id});
-                    user.set('first_name', data.first_name);
-                    user.set('last_name', data.last_name);
-                    user.set('email', data.email);
+                update: function(data, id, successCallback, errorCallback) {
+                    db.transaction(function(tx) {
+                        var query = "UPDATE users SET first_name=?, last_name=?, email=? WHERE id=?";
+                        tx.executeSql(query, [data.first_name, data.last_name, data.email, id], function() {
+                            var user = new User({id: id});
+                            user.set('first_name', data.first_name);
+                            user.set('last_name', data.last_name);
+                            user.set('email', data.email);
+                            users.add(user, {merge: true});
 
-                    return users.add(user, {merge: true});
+                            successCallback();
+                        }, errorCallback);
+                    });
                 },
 
-                delete: function(id) {
-                    deleteUser(id);
-                    return users.remove(users.get(id));
+                delete: function(id, successCallback, errorCallback) {
+                    db.transaction(function(tx) {
+                        var query = "DELETE FROM users WHERE id=?";
+                        tx.executeSql(query, [id], function() {
+                            users.remove({id: id});
+                            // users.remove(users.get(id));
+
+                            successCallback();
+                        }, errorCallback);
+                    });
                 }
             }
         );
@@ -372,6 +421,23 @@
                 this.template = _.template($('#user-form-tmpl').html());
             },
 
+            activateValidation: function() {
+                this.$el.find('form').validate({
+                    debug: true,
+                    rules: {
+                        first_name: {
+                            required: true,
+                            alphaExcept: [" "]
+                        },
+                        last_name: {
+                            required: true,
+                            alphaExcept: [" "]
+                        },
+                        email: "email"
+                    }
+                });
+            },
+
             render: function() {
                 this.$el.html(this.template({
                     page_header: "Create User",
@@ -381,6 +447,9 @@
                     last_name: "",
                     email: ""
                 }));
+
+                this.activateValidation();
+
                 return this;
             }
         });
@@ -406,6 +475,23 @@
                 this.template = _.template($('#user-form-tmpl').html());
             },
 
+            activateValidation: function() {
+                this.$el.find('form').validate({
+                    debug: true,
+                    rules: {
+                        first_name: {
+                            required: true,
+                            alphaExcept: [" "]
+                        },
+                        last_name: {
+                            required: true,
+                            alphaExcept: [" "]
+                        },
+                        email: "email"
+                    }
+                });
+            },
+
             render: function(id) {
                 var user = users.get(id);
 
@@ -418,6 +504,9 @@
                     last_name: user.get('last_name'),
                     email: user.get('email')
                 }));
+
+                this.activateValidation();
+
                 return this;
             }
         });
